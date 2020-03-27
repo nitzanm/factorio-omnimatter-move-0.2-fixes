@@ -1,5 +1,5 @@
 ore_to_move = {}
-
+copied_oil = {}
 
 function start_with(a,b)
 	return string.sub(a,1,string.len(b)) == b
@@ -30,18 +30,25 @@ script.on_event(defines.events.on_player_selected_area, function(event)
 		end
 		local centre = {x=0,y=0}
 		local qnt = 0
+		local oil_qnt = 0
 		for _,entity in pairs(event.entities) do
 			if entity.type == "resource" then
-				qnt=qnt+1
-				local pos = entity.position
-				centre.x=centre.x+pos.x
-				centre.y=centre.y+pos.y
-				ore_to_move[event.player_index].ore[#ore_to_move[event.player_index].ore+1]={name=entity.name,pos=pos,surface = entity.surface}
-
-				local extra = entity
-				--extra.destroy()
-							
-					--surf.create_entity({name = "compressed-"..name.."-ore" , position = pos, force = force, amount = quant})
+				if entity.name == 'crude-oil' then
+					oil_qnt = oil_qnt + 1
+					if copied_oil[event.player_index] == nil then
+						copied_oil[event.player_index] = {}
+					end
+					table.insert(copied_oil[event.player_index], entity.amount)
+					log(serpent.block(copied_oil[event.player_index]))
+					player.insert({name="oil-patch-item", count=1, amount=entity.amount, nitzan_custom=entity.amount})
+					entity.destroy()
+				else
+					qnt=qnt+1
+					local pos = entity.position
+					centre.x=centre.x+pos.x
+					centre.y=centre.y+pos.y
+					ore_to_move[event.player_index].ore[#ore_to_move[event.player_index].ore+1]={name=entity.name,pos=pos,surface = entity.surface}
+				end
 			end
 		end
 		centre.x=round(centre.x/qnt)
@@ -64,11 +71,26 @@ script.on_event(defines.events.on_player_selected_area, function(event)
 			end
 		end
 			--player.insert({name = resource, count = miscount})
+		if qnt > 0 then
+			player.print(string.format("Copied %d resources.", qnt))
+		end
+		if oil_qnt > 0 then
+			player.print(string.format("Sent %d oil patches to inventory.", oil_qnt))
+		end
 	end
 end)
 
 script.on_event(defines.events.on_player_alt_selected_area, function(event)
-	if event.item == "ore-move-planner" and ore_to_move[event.player_index] ~= nil then
+	if event.item == "ore-move-planner" then
+		if ore_to_move[event.player_index] == nil then
+			player.print("No copied resources.")
+			return
+		end
+		local qnt = #ore_to_move[event.player_index].ore
+		if qnt == 0 then
+			player.print("No copied resources.")
+			return
+		end
 		local player = game.players[event.player_index]
 		local surface = player.surface
 		local centre = {x=round((event.area.left_top.x+event.area.right_bottom.x)/2),y=round((event.area.left_top.y+event.area.right_bottom.y)/2)}
@@ -78,13 +100,9 @@ script.on_event(defines.events.on_player_alt_selected_area, function(event)
 			dist=dist+ore_to_move[event.player_index].samples[ore_to_move[event.player_index].catch.samples[1]].dist
 		end
 		--dist=dist+ore_to_move[event.player_index].cost
+		log("ore mover v2:")
+		log(serpent.block(ore_to_move[event.player_index]))
 		for _, ore in pairs(ore_to_move[event.player_index].ore) do
-			player.print("x:")
-			player.print(ore.pos.x)
-			player.print(ore.pos.x + 1)
-			player.print("y:")
-			player.print(ore.pos.y)
-			player.print(ore.pos.y + 1)
 			local entities = surface.find_entities_filtered{
 			  area= {{ore_to_move[event.player_index].centre.x+ore.pos.x -0.5, ore_to_move[event.player_index].centre.y+ore.pos.y -0.5},
 			  {ore_to_move[event.player_index].centre.x+ore.pos.x +0.5, ore_to_move[event.player_index].centre.y+ore.pos.y +0.5}},
@@ -129,6 +147,31 @@ script.on_event(defines.events.on_player_alt_selected_area, function(event)
 		ore_to_move[event.player_index].ore={}
 		ore_to_move[event.player_index].centre.x=centre.x
 		ore_to_move[event.player_index].centre.y=centre.y
+
+		player.print(string.format("Pasted %d resources.", qnt))
 	end
 end)
 
+script.on_event(defines.events.on_built_entity, function(event)
+	-- player.insert({name="oil-patch-item", count=1, amount=entity.amount, nitzan_custom=entity.amount})
+	if event.stack.name == 'oil-patch-item' then
+		player_oil = copied_oil[event.player_index]
+
+		if player_oil == nil then
+			local player = game.players[event.player_index]
+			player.print("Warning: incorrectly null copied oil list; did you restart the game after copying and before placing?")
+			return
+		end
+
+		amount = table.remove(player_oil, 1)
+		if amount ~= nil then
+			event.created_entity.amount = amount
+		else
+			local player = game.players[event.player_index]
+			player.print("Warning: incorrectly empty copied oil list.")
+		end
+	end
+end)
+
+
+-- game.player.surface.create_entity({name="crude-oil", amount=100000, position={game.player.position.x+x*7-7, game.player.position.y+y*7-7}})

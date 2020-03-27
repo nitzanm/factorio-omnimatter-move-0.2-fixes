@@ -17,6 +17,16 @@ data:extend({
     alt_selection_cursor_box_type = "entity"
     
   },
+
+  {
+    name = "oil-patch-item",
+    type = "item-with-entity-data",
+    icon = "__base__/graphics/icons/fluid/crude-oil.png",
+    icon_size = 32,
+    stack_size = 100,
+    place_result = "crude-oil",
+  },
+
   {
     type = "recipe",
     name = "ore-move-planner",
